@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "service_key": "seznamcz",
+  "display_name": "Seznam.cz",
+  "description": "Declarative descriptor for Seznam.cz phone existence check",
+  "requires_proxy": false,
+  "recommended_delay": 0,
+  "timeouts": { "request": 10 },
+  "rate_limits": { "rpm": 60 },
+  "endpoints": [
+    {
+      "name": "resolve_phone",
+      "method": "GET",
+      "url": "https://login.szn.cz/api/v1/username/resolve-phone/${phone}",
+      "headers": {
+        "Accept": "application/json;q=0.9,*/*;q=0.8",
+        "Referer": "https://login.szn.cz/",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      "success_signals": [
+        { "type": "status", "equals": 200, "weight": 0.6 },
+        { "type": "json_path", "path": "$.exists", "equals": true, "weight": 0.6 }
+      ],
+      "failure_signals": [
+        { "type": "json_path", "path": "$.exists", "equals": false, "weight": 1.0 },
+        { "type": "status", "equals": 404, "weight": 0.7 }
+      ],
+      "retry": { "max_retries": 1, "backoff_ms": 300 }
+    }
+  ]
+}

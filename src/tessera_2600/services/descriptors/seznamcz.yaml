@@ -1,0 +1,39 @@
+schema_version: 1
+service_key: seznamcz
+display_name: Seznam.cz
+description: "Example YAML descriptor for Seznam.cz phone existence check (Python class still takes precedence)"
+requires_proxy: false
+recommended_delay: 0
+timeouts:
+  request: 10
+rate_limits:
+  rpm: 60
+endpoints:
+  - name: resolve_phone
+    method: GET
+    # NOTE: Seznam expects a local CZ mobile number (9 digits). This YAML example uses ${phone} verbatim.
+    # In practice, the Python service cleans +420 and formats the number. This file is for demonstration.
+    url: "https://login.szn.cz/api/v1/username/resolve-phone/${phone}"
+    headers:
+      Accept: "application/json;q=0.9,*/*;q=0.8"
+      Referer: "https://login.szn.cz/"
+      X-Requested-With: "XMLHttpRequest"
+    success_signals:
+      - type: status
+        equals: 200
+        weight: 0.6
+      - type: json_path
+        path: $.exists
+        equals: true
+        weight: 0.6
+    failure_signals:
+      - type: json_path
+        path: $.exists
+        equals: false
+        weight: 1.0
+      - type: status
+        equals: 404
+        weight: 0.7
+    retry:
+      max_retries: 1
+      backoff_ms: 300

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tessera-2600"
+version = "1.0.0"
+description = "Tessera-2600: OSINT tool for phone number reconnaissance across services"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "DanniSec", email="danny@seraphim-solutions.com" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Topic :: Security",
+]
+dependencies = ["requests>=2.25", "rich>=13"]
+
+[project.urls]
+Homepage = "https://github.com/Seraphim-Solutions/tessera"
+Issues = "https://github.com/Seraphim-Solutions/tessera/issues"
+
+[project.scripts]
+"tessera" = "tessera_2600.tessera_cli:main"
+"tessera-2600" = "tessera_2600.tessera_cli:main"
+"tessera2600" = "tessera_2600.tessera_cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"tessera_2600.services" = [
+  "descriptors/*.json",
+  "descriptors/*.yaml",
+  "descriptors/*.yml",
+]
