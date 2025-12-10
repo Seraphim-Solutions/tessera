@@ -32,7 +32,7 @@ After installing from PyPI, use the console script:
 tessera -n "+420 731x4x748"
 
 # Choose specific services
-tessera -n "+420 731x4x748" --services seznamcz instagram
+tessera -n "+420 731x4x748" --services seznamcz <another_service>
 
 # Use country-specific mobile prefixes when first digit is unknown (x)
 tessera -n "+420 xxxxxxxx" --use-country-prefixes
