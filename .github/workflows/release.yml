@@ -133,7 +133,7 @@ jobs:
           
           ### 📥 Installation
           ```bash
-          pip install your-package-name==${{ steps.get_version.outputs.version }}
+          pip install tessera-2600==${{ steps.get_version.outputs.version }}
           ```
 
   publish-to-testpypi:
