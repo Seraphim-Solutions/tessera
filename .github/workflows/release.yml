@@ -89,6 +89,7 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
+          verify-metadata: false
           # If not using Trusted Publishing, set TEST_PYPI_API_TOKEN secret and uncomment the next line:
           # password: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
@@ -97,5 +98,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@v1.10.3
         with:
           skip-existing: true
+          verify-metadata: false
           # If not using Trusted Publishing, set PYPI_API_TOKEN secret and uncomment the next line:
           # password: ${{ secrets.PYPI_API_TOKEN }}
