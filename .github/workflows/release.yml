@@ -39,12 +39,26 @@ jobs:
       - name: Verify tag matches version in pyproject.toml
         id: verify
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          # Expecting tags like v1.2.3 or v1.2.3-rc.1
+          # Try GITHUB_REF_NAME, fall back to parsing GITHUB_REF if not set
+          TAG="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
+          echo "GITHUB_REF='${GITHUB_REF}'"
+          echo "GITHUB_REF_NAME='${GITHUB_REF_NAME}'"
+          echo "Raw TAG='${TAG}'"
+          # Strip leading 'v' for tags like v1.2.3
           TAG_VERSION="${TAG#v}"
-          echo "Tag: $TAG  Parsed version: $TAG_VERSION"
-          PY_VERSION=$(python -c "import tomllib,sys;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          echo "pyproject version: $PY_VERSION"
+          echo "Parsed TAG_VERSION='${TAG_VERSION}'"
+
+          # Read and strip whitespace/CR from pyproject version robustly
+          PY_VERSION=$(python - <<'PY'
+          import tomllib,sys
+          v = tomllib.load(open('pyproject.toml','rb'))['project']['version']
+          sys.stdout.write(v.strip())
+          PY
+          )
+          # Remove any stray CRs just in case
+          PY_VERSION="${PY_VERSION//$'\r'/}"
+          echo "pyproject version='${PY_VERSION}'"
+
           if [ "$PY_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match pyproject version ($PY_VERSION)."
             exit 1
