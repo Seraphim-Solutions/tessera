@@ -1,103 +1,180 @@
-name: Release & Publish
+name: Build, Release & Publish to PyPI
 
 on:
   push:
     tags:
-      - 'v*'   # Tag releases like v1.2.3 or v1.2.3-rc.1
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3-rc.1, etc.
 
 permissions:
-  contents: write   # Needed to create GitHub Releases
-  id-token: write   # Required for PyPI Trusted Publishing (recommended)
+  contents: write     # Required to create GitHub releases and upload assets
 
 jobs:
-  build-and-publish:
+  build-and-test:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
 
-      - name: Install build and test deps (latest)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade build setuptools wheel twine
-          # Install the package (non-editable to avoid creating src/*.egg-info)
-          pip install .
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        VERSION=${TAG_NAME#v}
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Tag: $TAG_NAME, Version: $VERSION"
 
-      - name: Run unit tests
-        run: |
-          python -m unittest discover -s tests -p 'test_*.py' -v
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install build twine
 
-      - name: Clean previous build artifacts
-        run: |
-          rm -rf dist build src/*.egg-info
+    - name: Install package for testing
+      run: |
+        python -m pip install -e .
 
-      - name: Verify tag matches version in pyproject.toml
-        id: verify
-        run: |
-          # Try GITHUB_REF_NAME, fall back to parsing GITHUB_REF if not set
-          TAG="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
-          echo "GITHUB_REF='${GITHUB_REF}'"
-          echo "GITHUB_REF_NAME='${GITHUB_REF_NAME}'"
-          echo "Raw TAG='${TAG}'"
-          # Strip leading 'v' for tags like v1.2.3
-          TAG_VERSION="${TAG#v}"
-          echo "Parsed TAG_VERSION='${TAG_VERSION}'"
+    - name: Run tests
+      run: |
+        python -m unittest discover -s tests -p 'test_*.py' -v
+      continue-on-error: false
 
-          # Read and strip whitespace/CR from pyproject version robustly
-          PY_VERSION=$(python - <<'PY'
-          import tomllib,sys
-          v = tomllib.load(open('pyproject.toml','rb'))['project']['version']
-          sys.stdout.write(v.strip())
-          PY
-          )
-          # Remove any stray CRs just in case
-          PY_VERSION="${PY_VERSION//$'\r'/}"
-          echo "pyproject version='${PY_VERSION}'"
+    - name: Verify version consistency
+      run: |
+        PYPROJECT_VERSION=$(python -c "
+        import tomllib
+        with open('pyproject.toml', 'rb') as f:
+            data = tomllib.load(f)
+        print(data['project']['version'])
+        ")
+        
+        TAG_VERSION="${{ steps.get_version.outputs.version }}"
+        
+        if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+          echo "❌ Version mismatch!"
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Git tag version: $TAG_VERSION"
+          exit 1
+        fi
+        
+        echo "✅ Version verification passed"
 
-          if [ "$PY_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Tag version ($TAG_VERSION) does not match pyproject version ($PY_VERSION)."
-            exit 1
-          fi
+    - name: Clean build artifacts
+      run: |
+        rm -rf dist/ build/ *.egg-info/
 
-      - name: Install build tooling (redundant safety)
-        run: |
-          python -m pip install --upgrade build setuptools wheel
+    - name: Build package
+      run: |
+        python -m build
 
-      - name: Build distributions
-        run: |
-          python -m build
+    - name: Verify built package
+      run: |
+        python -m twine check dist/*
 
-      - name: Verify built artifacts (twine check)
-        run: |
-          python -m twine check dist/*
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
 
-      - name: Create GitHub Release and upload artifacts
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*
+  github-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
-      - name: Publish to TestPyPI (pre-releases)
-        if: contains(github.ref_name, '-rc') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'dev')
-        uses: pypa/gh-action-pypi-publish@v1.10.3
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-          verify-metadata: false
-          # If not using Trusted Publishing, set TEST_PYPI_API_TOKEN secret and uncomment the next line:
-          # password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
 
-      - name: Publish to PyPI (stable releases)
-        if: ${{ !contains(github.ref_name, '-rc') && !contains(github.ref_name, 'a') && !contains(github.ref_name, 'b') && !contains(github.ref_name, 'dev') }}
-        uses: pypa/gh-action-pypi-publish@v1.10.3
-        with:
-          skip-existing: true
-          verify-metadata: false
-          # If not using Trusted Publishing, set PYPI_API_TOKEN secret and uncomment the next line:
-          # password: ${{ secrets.PYPI_API_TOKEN }}
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        VERSION=${TAG_NAME#v}
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Determine release type
+      id: release_type
+      run: |
+        VERSION="${{ steps.get_version.outputs.version }}"
+        if [[ "$VERSION" =~ (rc|a|b|dev|alpha|beta) ]]; then
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_version.outputs.tag_name }}
+        name: Release ${{ steps.get_version.outputs.tag_name }}
+        prerelease: ${{ steps.release_type.outputs.is_prerelease }}
+        generate_release_notes: true
+        files: |
+          dist/*.whl
+          dist/*.tar.gz
+        body: |
+          ## 📦 Package Information
+          
+          **Version:** `${{ steps.get_version.outputs.version }}`
+          **Release Type:** ${{ steps.release_type.outputs.is_prerelease == 'true' && 'Pre-release' || 'Stable Release' }}
+          
+          ### 📥 Installation
+          ```bash
+          pip install your-package-name==${{ steps.get_version.outputs.version }}
+          ```
+
+  publish-to-testpypi:
+    needs: build-and-test
+    if: contains(github.ref_name, 'rc') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'dev')
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
+        print-hash: true
+
+  publish-to-pypi:
+    needs: build-and-test
+    if: ${{ !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'a') && !contains(github.ref_name, 'b') && !contains(github.ref_name, 'dev') }}
+    runs-on: ubuntu-latest
+    environment: pypi  # Optional: for additional security
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        skip-existing: true
+        print-hash: true
