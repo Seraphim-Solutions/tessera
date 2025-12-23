@@ -57,5 +57,5 @@ jobs:
         if: ${{ !contains(matrix.python-version, 'a') && !contains(matrix.python-version, 'b') && !contains(matrix.python-version, 'rc') }}
         uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ github.sha }}
+          name: dist-python-${{ matrix.python-version }}-${{ github.sha }}
           path: dist/*
