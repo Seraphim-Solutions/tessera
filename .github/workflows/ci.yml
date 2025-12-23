@@ -7,13 +7,26 @@ on:
     branches: [ main, master ]
 
 jobs:
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-matrix: ${{ steps.get-python-versions-action.outputs.latest-python-versions }}
+    steps:
+      - uses: snok/latest-python-versions@v1
+        id: get-python-versions-action
+        with:
+          min-version: 3.8
+          include-prereleases: true
+
   test:
     name: Tests on Python ${{ matrix.python-version }}
+    needs: get-python-versions
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"] #3.15 is pre-release, good to know the compat for future.
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-matrix) }}
+
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -22,6 +35,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
           cache: 'pip'
 
       - name: Install package
@@ -33,15 +47,15 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_*.py' -v
 
-      - name: Build distribution (once)
-        if: matrix.python-version == '3.12'
-        run: |
-          python -m pip install build
-          python -m build
+ #     - name: Build distribution (once)
+ #       if: matrix.python-version == '3.12'
+ #       run: |
+ #         python -m pip install build
+ #         python -m build
 
-      - name: Upload dist artifacts
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ github.sha }}
-          path: dist/*
+ #     - name: Upload dist artifacts
+ #       if: matrix.python-version == '3.12'
+ #       uses: actions/upload-artifact@v4
+ #       with:
+ #         name: dist-${{ github.sha }}
+ #         path: dist/*
