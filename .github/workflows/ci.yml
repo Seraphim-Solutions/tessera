@@ -54,7 +54,7 @@ jobs:
           python -m build
 
       - name: Upload dist artifacts
-        if: ${{ !contains(matrix.python-version, 'a') && !contains(matrix.python-version, 'b') && !contains(matrix.python-version, 'rc') && matrix.python-version == '3.12' }}
+        if: ${{ !contains(matrix.python-version, 'a') && !contains(matrix.python-version, 'b') && !contains(matrix.python-version, 'rc') }}
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ github.sha }}
