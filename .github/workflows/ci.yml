@@ -48,19 +48,14 @@ jobs:
           python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: Build distribution
+        if: ${{ !contains(matrix.python-version, 'a') && !contains(matrix.python-version, 'b') && !contains(matrix.python-version, 'rc') }}
         run: |
           python -m pip install build
           python -m build
-          
- #     - name: Build distribution (once)
- #       if: matrix.python-version == '3.12'
- #       run: |
- #         python -m pip install build
- #         python -m build
 
- #     - name: Upload dist artifacts
- #       if: matrix.python-version == '3.12'
- #       uses: actions/upload-artifact@v4
- #       with:
- #         name: dist-${{ github.sha }}
- #         path: dist/*
+      - name: Upload dist artifacts
+        if: ${{ !contains(matrix.python-version, 'a') && !contains(matrix.python-version, 'b') && !contains(matrix.python-version, 'rc') && matrix.python-version == '3.12' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist/*
