@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "service_key": "instagram",
+  "display_name": "Instagram",
+  "description": "Instagram users/lookup with IG signed body (v4)",
+  "requires_proxy": true,
+  "recommended_delay": 5,
+  "timeouts": { "request": 10 },
+  "rate_limits": { "rpm": 30 },
+  "endpoints": [
+    {
+      "name": "users_lookup",
+      "method": "POST",
+      "url": "https://i.instagram.com/api/v1/users/lookup/",
+      "headers": {
+        "Accept-Language": "en-US",
+        "Accept": "*/*",
+        "User-Agent": "Instagram 101.0.0.15.120",
+        "Accept-Encoding": "gzip, deflate",
+        "X-FB-HTTP-Engine": "Liger",
+        "Connection": "close"
+      },
+      "body": {
+        "login_attempt_count": "0",
+        "directly_sign_in": "true",
+        "source": "default",
+        "q": "${phone}",
+        "ig_sig_key_version": "4"
+      },
+      "signer": "tessera_2600.services.signers.instagram:ig_sig_v4",
+      "signer_params": { "q_format": "digits" },
+      "success_signals": [
+        { "type": "status", "equals": 200, "weight": 1.0 },
+        { "type": "regex", "pattern": "\\\"user\\\"\\s*:\\s*\\{", "weight": 0.8 }
+      ],
+      "failure_signals": [
+        { "type": "json_path", "path": "$.message", "equals": "No users found", "weight": 1.0 },
+        { "type": "json_path", "path": "$.spam", "equals": true, "weight": 1.0 },
+        { "type": "status", "equals": 429, "weight": 1.0 }
+      ],
+      "retry": { "max_retries": 1, "backoff_ms": 2000 }
+    }
+  ]
+}

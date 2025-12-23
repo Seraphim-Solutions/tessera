@@ -5,10 +5,21 @@ OSINT tool for phone number reconnaissance with rich terminal feedback.
 """
 
 import argparse
+import os
 import sys
 import logging
 import time
 from typing import List, Dict, Tuple, Optional
+
+# Ensure local source package is importable when running this file directly or as a script
+try:  # pragma: no cover - runtime convenience for direct script execution
+    import os as _os, sys as _sys
+    _src_root = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", ".."))
+    if _src_root not in _sys.path:
+        # Prepend to take precedence over any installed package in site-packages
+        _sys.path.insert(0, _src_root)
+except Exception:
+    pass
 
 # Import core modules (use absolute package imports for PyPI compatibility)
 from tessera_2600.generator import expand_phone_number, validate_pattern, can_use_country_prefixes
@@ -273,8 +284,8 @@ def setup_logging(verbose: bool = False):
     # Quiet noisy libraries unless verbose
     for name in ("urllib3", "requests", "asyncio"):
         logging.getLogger(name).setLevel(logging.WARNING if not verbose else logging.INFO)
-    # Silence our own info logs by default; services can be noisy on INFO
-    for name in ("services", "generator", "checker"):
+    # Our own modules: enable extra debug when verbose, including core runtime
+    for name in ("services", "generator", "checker", "tessera_2600.core", "tessera_2600.core.declarative_service"):
         logging.getLogger(name).setLevel(logging.WARNING if not verbose else logging.DEBUG)
 
 
@@ -345,9 +356,22 @@ def main():
         _print_rate_limit_table(args.services if args.services else list(SERVICE_CONFIGURATIONS.keys()))
         return 0
     
+    # Cross-reference mode (no scanning)
+    if args.cross_ref:
+        if not args.cross_ref_output:
+            console.print("[red]--cross-ref-output is required when using --cross-ref[/]")
+            return 2
+        rh = ResultsHandler()
+        ok = rh.cross_reference_files(
+            inputs=args.cross_ref,
+            output_file=args.cross_ref_output,
+            require_all=args.cross_ref_all
+        )
+        return 0 if ok else 1
+    
     # Require --number for actual execution
     if not args.number:
-        parser.error("--number is required (unless using --show-services or --show-rate-limits)")
+        parser.error("--number is required (unless using --show-services, --show-rate-limits, or --cross-ref)")
     
     # Validate arguments
     if not validate_args(args):
@@ -497,6 +521,47 @@ def main():
             if results_handler.save_results(found_accounts, args.output):
                 console.print(f"\n✅ Results saved to {args.output}")
         
+        # Save per-service outputs if requested
+        written_files = {}
+        if args.per_service_out_dir:
+            try:
+                written_files = results_handler.save_per_service_results(
+                    found_accounts,
+                    args.per_service_out_dir,
+                    output_format=args.per_service_format
+                )
+                if written_files:
+                    console.print(f"📁 Per-service outputs saved in {args.per_service_out_dir} ({len(written_files)} files)")
+            except Exception as e:
+                console.print(f"[red]Failed to save per-service outputs:[/] {e}")
+        
+        # Offer cross-reference of per-service outputs
+        if written_files and len(written_files) >= 2:
+            do_cross = args.cross_ref_after_scan or confirm_action(
+                "Cross-reference per-service output files for numbers appearing in multiple services?",
+                default=False
+            )
+            if do_cross:
+                require_all = args.cross_ref_all
+                if not args.cross_ref_after_scan:
+                    # Ask whether to require presence in ALL files
+                    require_all = confirm_action(
+                        "Require numbers to appear in ALL per-service files? (No = at least two)",
+                        default=False
+                    )
+                # Determine output path
+                out_path = args.cross_ref_output
+                if not out_path:
+                    # default file in the same dir
+                    out_path = os.path.join(args.per_service_out_dir, 'crossref.json')
+                ok = results_handler.cross_reference_files(
+                    inputs=list(written_files.values()),
+                    output_file=out_path,
+                    require_all=require_all
+                )
+                if ok:
+                    console.print(f"🔗 Cross-reference written to {out_path}")
+        
         return 0
         
     except KeyboardInterrupt:
@@ -557,6 +622,16 @@ Examples:
     parser.add_argument("--show-services", action="store_true", help="Show service information and exit")
     parser.add_argument("--show-rate-limits", action="store_true", help="Show rate limiting recommendations")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} CLI v{APP_VERSION}")
+
+    # Per-service outputs
+    parser.add_argument("--per-service-out-dir", help="Directory to save per-service outputs (e.g., facebook.json, instagram.json)")
+    parser.add_argument("--per-service-format", choices=['json', 'csv', 'txt'], default='json', help="Format for per-service outputs (default: json)")
+
+    # Cross-reference mode and options
+    parser.add_argument("--cross-ref", nargs='+', help="Cross-reference mode: provide result files and/or directories to analyze; skips scanning")
+    parser.add_argument("--cross-ref-output", help="Path to save cross-reference results; format inferred by extension (json/csv/txt)")
+    parser.add_argument("--cross-ref-all", action="store_true", help="Require numbers to appear in all inputs (default: numbers present in at least two)")
+    parser.add_argument("--cross-ref-after-scan", action="store_true", help="After scanning and saving per-service outputs, cross-reference automatically without prompting")
     
     return parser
 

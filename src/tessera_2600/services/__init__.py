@@ -46,14 +46,31 @@ _DUPLICATE_WARNINGS = []
 
 logger = logging.getLogger(__name__)
 try:
+    # Collect descriptor search directories: package defaults plus any extras from env
     _desc_dir = os.path.join(os.path.dirname(__file__), 'descriptors')
+    _search_dirs = []
     if os.path.isdir(_desc_dir):
+        _search_dirs.append(_desc_dir)
+    # Allow injecting additional descriptor directories via env (path-separated)
+    # e.g., TESSERA_EXTRA_DESCRIPTOR_DIRS="/path/to/repo/src/tessera_2600/services/descriptors"
+    _extra = os.environ.get('TESSERA_EXTRA_DESCRIPTOR_DIRS') or os.environ.get('TESSERA_DESCRIPTOR_DIRS')
+    if _extra:
+        for d in _extra.split(os.path.pathsep):
+            d = d.strip()
+            if d and os.path.isdir(d):
+                _search_dirs.append(d)
+
+    if _search_dirs:
         # Group files by base name to detect duplicates regardless of YAML availability
-        files = [f for f in os.listdir(_desc_dir) if f.lower().endswith(('.json', '.yaml', '.yml'))]
         groups = {}
-        for fname in files:
-            base, ext = os.path.splitext(fname)
-            groups.setdefault(base, []).append((fname, ext.lower()))
+        for d in _search_dirs:
+            try:
+                files = [f for f in os.listdir(d) if f.lower().endswith(('.json', '.yaml', '.yml'))]
+            except Exception:
+                files = []
+            for fname in files:
+                base, ext = os.path.splitext(fname)
+                groups.setdefault(base, []).append((os.path.join(d, fname), ext.lower()))
 
         def _parse_descriptor(path: str) -> Optional[ServiceDescriptor]:
             try:
@@ -66,16 +83,17 @@ try:
                 else:
                     return None
                 if not isinstance(data, dict):
+                    logger.warning(f"Descriptor file is not a mapping: {os.path.basename(path)}")
                     return None
                 return descriptor_from_dict(data)
-            except Exception:
+            except Exception as e:
+                # Make descriptor loading failures visible to help diagnose why a service is missing
+                logger.warning(f"Failed to parse descriptor '{os.path.basename(path)}': {e}")
                 return None
 
         # Resolve per-group selection with priority: .json > .yaml/.yml
-        for base, candidates in groups.items():
-            # Build absolute paths
-            abs_candidates = [(os.path.join(_desc_dir, fname), ext) for fname, ext in candidates]
-
+        for base, abs_candidates in groups.items():
+            
             # Prefer JSON
             json_candidates = [p for p, ext in abs_candidates if ext == '.json']
             yaml_candidates = [p for p, ext in abs_candidates if ext in ('.yaml', '.yml')]
@@ -101,7 +119,7 @@ try:
                 continue
 
             # Warn if duplicates exist for this base
-            if len(candidates) > 1:
+            if len(abs_candidates) > 1:
                 warning = (
                     f"Multiple descriptor files for service '{base}': {', '.join(sorted(os.path.basename(p) for p, _ in abs_candidates))}. "
                     f"Selected '{os.path.basename(selected_path)}' (JSON preferred)."
@@ -119,7 +137,7 @@ try:
             DESCRIPTOR_SOURCES[key] = {
                 'selected_path': selected_path,
                 'selected_file': os.path.basename(selected_path),
-                'candidates': [os.path.join(_desc_dir, fn) for fn, _ in candidates],
+                'candidates': [p for p, _ in abs_candidates],
             }
 
             # Expose every descriptor as a service

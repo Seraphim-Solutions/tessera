@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessera-2600"
-version = "1.0.1"
+version = "1.1.0"
 description = "Tessera-2600: OSINT tool for phone number reconnaissance across services"
 readme = "README.md"
 requires-python = ">=3.8"

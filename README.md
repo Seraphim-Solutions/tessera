@@ -5,7 +5,7 @@ CLI-only OSINT tool that generates phone-number variations and checks them acros
 - Runtime: Python 3.8+
 - Distribution: PyPI package `tessera-2600` (console scripts installed)
 - Primary CLI commands: `tessera`, `tessera-2600`, or `tessera2600`
-- Status: 1.0.0 (CLI-only)
+- Status: 1.1.0
 
 ## Installation
 
@@ -40,9 +40,27 @@ tessera -n "+420 xxxxxxxx" --use-country-prefixes
 # Show services and rate limit guidance
 tessera --show-services
 tessera --show-rate-limits
+
+# Save aggregated results (format inferred by extension)
+tessera -n "+420 731x4x748" -o results.json
+
+# Stream durable JSONL of all checks (append-only)
+tessera -n "+420 731x4x748" --jsonl-out runs/checks.jsonl
+
+# Save per-service outputs and then auto cross-reference
+tessera -n "+420 731x4x748" \
+  --per-service-out-dir out/ \
+  --per-service-format json \
+  --cross-ref-after-scan --cross-ref-output out/crossref.json
+
+# Standalone cross-reference mode (no scanning): pass files/dirs
+tessera --cross-ref out/ facebook.json instagram.json \
+        --cross-ref-output out/crossref.csv
 ```
 
 Aliases installed by the package: `tessera`, `tessera-2600`, and `tessera2600` (all equivalent).
+
+Note: `--number/-n` is required for scanning runs. It is not required when using informational or analysis modes such as `--show-services`, `--show-rate-limits`, or `--cross-ref`.
 
 The tool automatically detects country codes and suggests using country-specific mobile prefixes:
 
@@ -131,6 +149,27 @@ python -m build                      # produces dist/*.whl and dist/*.tar.gz
 twine check dist/*                   # optional validation
 pip install dist/*.whl               # install locally
 ```
+
+## Outputs and exports
+
+The CLI supports multiple export paths to suit different workflows:
+
+- Aggregated results: `--output/-o <path>`
+  - Format is inferred by file extension: `.json`, `.csv`, or `.txt`.
+  - JSON schema: `{ timestamp, total_found, accounts: [ { number, platform, url, ... } ] }`.
+
+- Per-service outputs: `--per-service-out-dir <dir>` with `--per-service-format {json,csv,txt}`
+  - Writes one file per platform (e.g., `facebook.json`, `instagram.csv`) into the given directory.
+  - JSON per-service files include a header `{ timestamp, service, total_found, accounts: [...] }`.
+
+- Durable stream (append-only): `--jsonl-out <path>`
+  - Appends every individual check as one JSON object per line for resilience against interruptions.
+
+- Cross-reference numbers across files: `--cross-ref <files/dirs...>`
+  - Analyzes two or more inputs (you may pass directories; known result patterns are auto-discovered).
+  - Saves to `--cross-ref-output <path>`; format is inferred by extension (`.json`, `.csv`, `.txt`).
+  - By default, reports numbers present in at least two inputs; use `--cross-ref-all` to require presence in all inputs.
+  - You can also enable `--cross-ref-after-scan` to automatically cross-reference the per-service files just written.
 
 ## Contributing
 
@@ -269,6 +308,12 @@ Descriptor file precedence and duplicates
 - YAML descriptors are only considered if `PyYAML` is installed; otherwise they are ignored.
 - When duplicates are present, Tessera logs a warning and surfaces the selected file in CLI output.
 - The `--show-services` table includes a “Descriptor” column that shows the exact filename (including extension) that was loaded for each service. The same table is printed after the banner at startup.
+
+Descriptor search paths
+- Built-in descriptors are loaded from the package directory `src/tessera_2600/services/descriptors`.
+- You can add extra directories via environment variable `TESSERA_EXTRA_DESCRIPTOR_DIRS` (or `TESSERA_DESCRIPTOR_DIRS`).
+  - Use your OS path separator to provide multiple directories (e.g., `export TESSERA_EXTRA_DESCRIPTOR_DIRS="/abs/path/one:/abs/path/two"`).
+  - Files from all search paths are grouped by base name; selection rules above (JSON preferred) still apply.
 
 Testing a descriptor
 - Unit tests should mock HTTP I/O. See `tests/test_declarative_service.py` for an example using `@patch("requests.Session.request")`.

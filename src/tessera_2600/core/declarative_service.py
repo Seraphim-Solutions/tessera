@@ -9,8 +9,10 @@ import re
 import time
 import logging
 from typing import Any, Dict, Optional
+import os
 
 import requests
+import importlib
 
 from tessera_2600.core.descriptor_models import ServiceDescriptor, Endpoint
 from tessera_2600.core.proxy_manager import ProxyManager
@@ -93,6 +95,22 @@ class DeclarativeService:
             out = out.replace(f"${{{k}}}", str(v))
         return out
 
+    def _load_signer(self, spec: str):
+        """Load a signer callable from a string spec 'module:attr' or 'module.func'."""
+        if not spec:
+            return None
+        module_path = spec
+        attr = None
+        if ':' in spec:
+            module_path, attr = spec.split(':', 1)
+        elif '.' in spec:
+            # Try to split on last dot as module.attr
+            parts = spec.rsplit('.', 1)
+            if len(parts) == 2:
+                module_path, attr = parts
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr) if attr else mod
+
     def _evaluate_signals(self, ep: Endpoint, resp: requests.Response) -> float:
         score = 0.0
         text = resp.text or ""
@@ -144,6 +162,16 @@ class DeclarativeService:
                 body = {k: self.render(v, ctx) for k, v in ep.body.items()}
                 params = {k: self.render(v, ctx) for k, v in ep.query.items()}
 
+                # Apply optional signer hook for request mutation
+                if getattr(ep, 'signer', None):
+                    try:
+                        signer = self._load_signer(ep.signer)  # type: ignore[attr-defined]
+                        if callable(signer):
+                            headers, params, body = signer(headers, params, body, ctx, **getattr(ep, 'signer_params', {}))  # type: ignore
+                    except Exception as _e:
+                        self._report_error()
+                        return f"[ERROR]: Signer failed: {_e}"
+
                 proxy = self._get_proxy()
                 timeout = int(self.descriptor.timeouts.get("request", self.timeout))
                 method = ep.method.upper()
@@ -159,7 +187,23 @@ class DeclarativeService:
                         timeout=max(timeout, 1),
                     )
                     last_status = resp.status_code
-                    confidence += self._evaluate_signals(ep, resp)
+                    score = self._evaluate_signals(ep, resp)
+                    confidence += score
+                    try:
+                        preview = (resp.text or "")[:200].replace("\n", " ")
+                    except Exception:
+                        preview = "<no preview>"
+                    line = (
+                        f"Descriptor {self.descriptor.service_key}/{ep.name}: "
+                        f"status={last_status}, score_add={score}, total_conf={confidence}, preview={preview!r}"
+                    )
+                    logger.info(line)
+                    # Optional hard print for environments where logging is captured/hidden
+                    if os.environ.get("TESSERA_DEBUG_REQUESTS") == "1":
+                        try:
+                            print(line, flush=True)
+                        except Exception:
+                            pass
                 except requests.exceptions.Timeout:
                     self._report_error()
                     return "[ERROR]: Request timeout"

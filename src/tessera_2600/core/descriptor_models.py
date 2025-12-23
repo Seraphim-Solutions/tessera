@@ -36,6 +36,9 @@ class Endpoint:
     headers: Dict[str, str] = field(default_factory=dict)
     query: Dict[str, str] = field(default_factory=dict)
     body: Dict[str, str] = field(default_factory=dict)
+    # Optional signer hook for pre-request mutation (module[:object])
+    signer: Optional[str] = None
+    signer_params: Dict[str, str] = field(default_factory=dict)
     success_signals: List[Signal] = field(default_factory=list)
     failure_signals: List[Signal] = field(default_factory=list)
     retry: Retry = field(default_factory=Retry)
@@ -82,6 +85,8 @@ def _coerce_endpoint(obj: dict) -> Endpoint:
         headers=dict(obj.get("headers", {})),
         query=dict(obj.get("query", {})),
         body=dict(obj.get("body", {})),
+        signer=str(obj.get("signer")) if obj.get("signer") else None,
+        signer_params=dict(obj.get("signer_params", {})),
         success_signals=[_coerce_signal(s) for s in obj.get("success_signals", [])],
         failure_signals=[_coerce_signal(s) for s in obj.get("failure_signals", [])],
         retry=_coerce_retry(obj.get("retry")),

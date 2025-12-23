@@ -293,7 +293,7 @@ def pause_on_found(found_result: str, phone_number: str, platform: str, auto_con
     Returns:
         bool: True to continue, False to stop
     """
-    from tessera_2600_DanniSec.config import SUCCESS_MESSAGES
+    from tessera_2600.config import SUCCESS_MESSAGES
     
     print(f"\n{'='*60}")
     print(f"ACCOUNT FOUND!")
