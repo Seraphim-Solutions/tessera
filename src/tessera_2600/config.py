@@ -7,7 +7,7 @@ import logging
 
 # Application Information
 APP_NAME = "Tessera"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 APP_DESCRIPTION = "Generate and check phone number variations across social media platforms"
 
 # Default Settings

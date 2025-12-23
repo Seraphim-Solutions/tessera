@@ -21,14 +21,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install package and test deps
+      - name: Install build and test deps (latest)
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install --upgrade build setuptools wheel twine
+          # Install the package (non-editable to avoid creating src/*.egg-info)
+          pip install .
 
       - name: Run unit tests
         run: |
           python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Clean previous build artifacts
+        run: |
+          rm -rf dist build src/*.egg-info
 
       - name: Verify tag matches version in pyproject.toml
         id: verify
@@ -44,13 +50,17 @@ jobs:
             exit 1
           fi
 
-      - name: Install build tooling
+      - name: Install build tooling (redundant safety)
         run: |
-          pip install build
+          python -m pip install --upgrade build setuptools wheel
 
       - name: Build distributions
         run: |
           python -m build
+
+      - name: Verify built artifacts (twine check)
+        run: |
+          python -m twine check dist/*
 
       - name: Create GitHub Release and upload artifacts
         if: startsWith(github.ref, 'refs/tags/')

@@ -7,7 +7,7 @@ Enhanced with country-specific default prefixes.
 
 import re
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from tessera_2600.config import MAX_WILDCARDS, COUNTRY_PATTERNS, PHONE_PATTERN
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ def validate_pattern(pattern: str) -> bool:
     
     return True
 
-def can_use_country_prefixes(pattern: str) -> tuple[bool, Optional[str], Optional[str]]:
+def can_use_country_prefixes(pattern: str) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Check if pattern can use country prefixes.
     Returns: (can_use, country_code, country_name)

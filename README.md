@@ -5,7 +5,6 @@ CLI-only OSINT tool that generates phone-number variations and checks them acros
 - Runtime: Python 3.8+
 - Distribution: PyPI package `tessera-2600` (console scripts installed)
 - Primary CLI commands: `tessera`, `tessera-2600`, or `tessera2600`
-- Status: 1.1.0
 
 ## Installation
 
